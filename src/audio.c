@@ -61,12 +61,32 @@ static void mute_mic(GtkWidget *button, gpointer user_data G_GNUC_UNUSED) {
     gtk_button_set_label(GTK_BUTTON(button), is_muted ? "Mute Mic" : "Unmute Mic");
 }
 
-static void set_volume_percentage(GtkWidget *button G_GNUC_UNUSED, int percentage) {
+// Global variables to store slider widgets
+static GtkWidget *g_speaker_scale = NULL;
+static GtkWidget *g_mic_scale = NULL;
+
+static void set_volume_percentage(GtkWidget *button G_GNUC_UNUSED, gpointer user_data) {
+    int percentage = GPOINTER_TO_INT(user_data);
     set_volume(percentage);
+    
+    // Update slider position
+    if (g_speaker_scale != NULL) {
+        g_signal_handlers_block_by_func(g_speaker_scale, G_CALLBACK(on_volume_changed), NULL);
+        gtk_range_set_value(GTK_RANGE(g_speaker_scale), percentage);
+        g_signal_handlers_unblock_by_func(g_speaker_scale, G_CALLBACK(on_volume_changed), NULL);
+    }
 }
 
-static void set_mic_percentage(GtkWidget *button G_GNUC_UNUSED, int percentage) {
+static void set_mic_percentage(GtkWidget *button G_GNUC_UNUSED, gpointer user_data) {
+    int percentage = GPOINTER_TO_INT(user_data);
     set_mic_volume(percentage);
+    
+    // Update slider position
+    if (g_mic_scale != NULL) {
+        g_signal_handlers_block_by_func(g_mic_scale, G_CALLBACK(on_mic_volume_changed), NULL);
+        gtk_range_set_value(GTK_RANGE(g_mic_scale), percentage);
+        g_signal_handlers_unblock_by_func(g_mic_scale, G_CALLBACK(on_mic_volume_changed), NULL);
+    }
 }
 
 void init_audio_page(GtkWidget *notebook, AppState *state G_GNUC_UNUSED) {
@@ -90,6 +110,7 @@ void init_audio_page(GtkWidget *notebook, AppState *state G_GNUC_UNUSED) {
     gtk_grid_attach(GTK_GRID(grid), speaker_label, 0, 0, 5, 1);
     
     GtkWidget *speaker_scale = gtk_scale_new_with_range(GTK_ORIENTATION_HORIZONTAL, 0, 100, 1);
+    g_speaker_scale = speaker_scale; // Store in global variable
     gtk_range_set_value(GTK_RANGE(speaker_scale), get_current_volume());
     gtk_scale_set_value_pos(GTK_SCALE(speaker_scale), GTK_POS_LEFT);
     g_signal_connect(speaker_scale, "value-changed", G_CALLBACK(on_volume_changed), NULL);
@@ -109,6 +130,7 @@ void init_audio_page(GtkWidget *notebook, AppState *state G_GNUC_UNUSED) {
     gtk_grid_attach(GTK_GRID(grid), mic_label, 0, 3, 5, 1);
     
     GtkWidget *mic_scale = gtk_scale_new_with_range(GTK_ORIENTATION_HORIZONTAL, 0, 100, 1);
+    g_mic_scale = mic_scale; // Store in global variable
     gtk_range_set_value(GTK_RANGE(mic_scale), get_current_mic_volume());
     gtk_scale_set_value_pos(GTK_SCALE(mic_scale), GTK_POS_LEFT);
     g_signal_connect(mic_scale, "value-changed", G_CALLBACK(on_mic_volume_changed), NULL);

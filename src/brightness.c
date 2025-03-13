@@ -15,8 +15,19 @@ static void on_brightness_changed(GtkWidget *scale, gpointer user_data G_GNUC_UN
     set_brightness(brightness);
 }
 
-static void set_brightness_percentage(GtkWidget *button G_GNUC_UNUSED, int percentage) {
+// Global variable to store slider widget
+static GtkWidget *g_brightness_scale = NULL;
+
+static void set_brightness_percentage(GtkWidget *button G_GNUC_UNUSED, gpointer user_data) {
+    int percentage = GPOINTER_TO_INT(user_data);
     set_brightness(percentage);
+    
+    // Update slider position
+    if (g_brightness_scale != NULL) {
+        g_signal_handlers_block_by_func(g_brightness_scale, G_CALLBACK(on_brightness_changed), NULL);
+        gtk_range_set_value(GTK_RANGE(g_brightness_scale), percentage);
+        g_signal_handlers_unblock_by_func(g_brightness_scale, G_CALLBACK(on_brightness_changed), NULL);
+    }
 }
 
 void init_brightness_page(GtkWidget *notebook, AppState *state G_GNUC_UNUSED) {
@@ -41,6 +52,7 @@ void init_brightness_page(GtkWidget *notebook, AppState *state G_GNUC_UNUSED) {
     
     // Brightness scale
     GtkWidget *brightness_scale = gtk_scale_new_with_range(GTK_ORIENTATION_HORIZONTAL, 0, 100, 1);
+    g_brightness_scale = brightness_scale; // Store in global variable
     gtk_range_set_value(GTK_RANGE(brightness_scale), get_current_brightness());
     gtk_scale_set_value_pos(GTK_SCALE(brightness_scale), GTK_POS_LEFT);
     g_signal_connect(brightness_scale, "value-changed", G_CALLBACK(on_brightness_changed), NULL);
