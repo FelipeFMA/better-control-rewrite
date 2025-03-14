@@ -286,6 +286,7 @@ static gpointer refresh_wifi_list_thread(gpointer user_data) {
     char *saveptr;
     char *line = strtok_r(output, "\n", &saveptr);
     int networks_added = 0;
+    GHashTable *seen_ssids = g_hash_table_new(g_str_hash, g_str_equal);
     
     while (line) {
         // Find the first colon (SSID:SIGNAL:SECURITY)
@@ -296,6 +297,12 @@ static gpointer refresh_wifi_list_thread(gpointer user_data) {
             
             // Skip empty SSIDs
             if (strlen(line) == 0) {
+                line = strtok_r(NULL, "\n", &saveptr);
+                continue;
+            }
+            
+            // Skip if we've already seen this SSID
+            if (g_hash_table_contains(seen_ssids, line)) {
                 line = strtok_r(NULL, "\n", &saveptr);
                 continue;
             }
@@ -324,6 +331,9 @@ static gpointer refresh_wifi_list_thread(gpointer user_data) {
             GtkWidget *row = create_wifi_row(line, signal, is_connected);
             gtk_list_box_append(GTK_LIST_BOX(listbox), row);
             networks_added++;
+            
+            // Mark this SSID as seen
+            g_hash_table_add(seen_ssids, g_strdup(line));
         }
         line = strtok_r(NULL, "\n", &saveptr);
     }
@@ -336,6 +346,8 @@ static gpointer refresh_wifi_list_thread(gpointer user_data) {
         gtk_list_box_append(GTK_LIST_BOX(listbox), row);
     }
     
+    // Clean up
+    g_hash_table_destroy(seen_ssids);
     free(output);
     if (current_connection) free(current_connection);
     
