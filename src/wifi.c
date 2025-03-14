@@ -27,6 +27,7 @@ typedef struct {
     GtkWidget *disconnect_button;
     char current_network[256];
     bool is_refreshing;
+    GThread *refresh_thread;
 } WiFiPageState;
 
 // Global state
@@ -231,22 +232,11 @@ static GtkWidget* create_wifi_row(const char *ssid, int signal_strength, bool is
     return row;
 }
 
-// Refresh the WiFi network list
-static void refresh_wifi_list(GtkWidget *button, gpointer user_data) {
+// Thread function for refreshing WiFi list
+static gpointer refresh_wifi_list_thread(gpointer user_data) {
     GtkWidget *listbox = wifi_state.network_list;
     if (!listbox || !GTK_IS_LIST_BOX(listbox)) {
-        return;
-    }
-    
-    // Prevent multiple refreshes at once
-    if (wifi_state.is_refreshing) {
-        return;
-    }
-    wifi_state.is_refreshing = true;
-    
-    // Disable refresh button during refresh
-    if (wifi_state.refresh_button) {
-        gtk_widget_set_sensitive(wifi_state.refresh_button, FALSE);
+        return NULL;
     }
     
     // Clear existing items
@@ -262,13 +252,9 @@ static void refresh_wifi_list(GtkWidget *button, gpointer user_data) {
         gtk_list_box_row_set_child(GTK_LIST_BOX_ROW(row), label);
         gtk_list_box_append(GTK_LIST_BOX(listbox), row);
         
-        // Re-enable refresh button
-        if (wifi_state.refresh_button) {
-            gtk_widget_set_sensitive(wifi_state.refresh_button, TRUE);
-        }
-        
+        g_idle_add((GSourceFunc)gtk_widget_set_sensitive, wifi_state.refresh_button);
         wifi_state.is_refreshing = false;
-        return;
+        return NULL;
     }
     
     // Get current connection
@@ -285,21 +271,15 @@ static void refresh_wifi_list(GtkWidget *button, gpointer user_data) {
     // Get WiFi list with more details - fix the command
     char *output = execute_command("nmcli -t -f SSID,SIGNAL,SECURITY device wifi list");
     if (!output) {
-        // Add a message if no networks found
         GtkWidget *row = gtk_list_box_row_new();
         GtkWidget *label = gtk_label_new("No networks found");
         gtk_list_box_row_set_child(GTK_LIST_BOX_ROW(row), label);
         gtk_list_box_append(GTK_LIST_BOX(listbox), row);
         
         if (current_connection) free(current_connection);
-        
-        // Re-enable refresh button
-        if (wifi_state.refresh_button) {
-            gtk_widget_set_sensitive(wifi_state.refresh_button, TRUE);
-        }
-        
+        g_idle_add((GSourceFunc)gtk_widget_set_sensitive, wifi_state.refresh_button);
         wifi_state.is_refreshing = false;
-        return;
+        return NULL;
     }
     
     // Parse and add networks
@@ -360,11 +340,26 @@ static void refresh_wifi_list(GtkWidget *button, gpointer user_data) {
     if (current_connection) free(current_connection);
     
     // Re-enable refresh button
+    g_idle_add((GSourceFunc)gtk_widget_set_sensitive, wifi_state.refresh_button);
+    wifi_state.is_refreshing = false;
+    
+    return NULL;
+}
+
+// Refresh the WiFi network list
+static void refresh_wifi_list(GtkWidget *button, gpointer user_data) {
+    if (wifi_state.is_refreshing || wifi_state.refresh_thread) {
+        return;
+    }
+    wifi_state.is_refreshing = true;
+    
+    // Disable refresh button during refresh
     if (wifi_state.refresh_button) {
-        gtk_widget_set_sensitive(wifi_state.refresh_button, TRUE);
+        gtk_widget_set_sensitive(wifi_state.refresh_button, FALSE);
     }
     
-    wifi_state.is_refreshing = false;
+    // Create and start a new thread for the refresh operation
+    wifi_state.refresh_thread = g_thread_new("wifi_refresh", refresh_wifi_list_thread, NULL);
 }
 
 // Toggle WiFi on/off
