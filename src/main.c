@@ -1,4 +1,5 @@
 #include "better_control.h"
+#include <getopt.h>
 
 // Function to set up CSS to fix GTK warnings
 static void setup_css(void) {
@@ -14,8 +15,29 @@ static void setup_css(void) {
     g_object_unref(provider);
 }
 
-static void activate(GtkApplication *app, gpointer user_data G_GNUC_UNUSED) {
+// Function to switch to a specific tab
+static void switch_to_tab(GtkNotebook *notebook, int tab_index) {
+    if (notebook && tab_index >= 0 && tab_index < gtk_notebook_get_n_pages(notebook)) {
+        gtk_notebook_set_current_page(notebook, tab_index);
+    }
+}
+
+// Print help message
+static void print_help(const char *program_name) {
+    printf("Usage: %s [OPTIONS]\n\n", program_name);
+    printf("Options:\n");
+    printf("  -w, --wifi        Open directly to WiFi tab\n");
+    printf("  -b, --bluetooth   Open directly to Bluetooth tab\n");
+    printf("  -a, --audio       Open directly to Audio tab\n");
+    printf("  -r, --brightness  Open directly to Brightness tab\n");
+    printf("  -h, --help        Display this help and exit\n");
+}
+
+static void activate(GtkApplication *app, gpointer user_data) {
     AppState *state = g_new(AppState, 1);
+    
+    // Get the tab index from user_data
+    int tab_index = GPOINTER_TO_INT(user_data);
     
     // Set up CSS to fix GTK warnings
     setup_css();
@@ -41,6 +63,11 @@ static void activate(GtkApplication *app, gpointer user_data G_GNUC_UNUSED) {
     init_audio_page(state->notebook, state);
     init_brightness_page(state->notebook, state);
     
+    // Switch to the specified tab if needed
+    if (tab_index >= 0) {
+        switch_to_tab(GTK_NOTEBOOK(state->notebook), tab_index);
+    }
+    
     // Present the window instead of using deprecated gtk_widget_show
     gtk_window_present(GTK_WINDOW(state->window));
 }
@@ -48,12 +75,50 @@ static void activate(GtkApplication *app, gpointer user_data G_GNUC_UNUSED) {
 int main(int argc, char **argv) {
     GtkApplication *app;
     int status;
+    int tab_index = -1; // Default: no specific tab
+    
+    // Define long options
+    static struct option long_options[] = {
+        {"wifi",       no_argument, 0, 'w'},
+        {"bluetooth",  no_argument, 0, 'b'},
+        {"audio",      no_argument, 0, 'a'},
+        {"brightness", no_argument, 0, 'r'},
+        {"help",       no_argument, 0, 'h'},
+        {0, 0, 0, 0}
+    };
+    
+    // Parse command line options
+    int opt;
+    int option_index = 0;
+    
+    while ((opt = getopt_long(argc, argv, "wbarh", long_options, &option_index)) != -1) {
+        switch (opt) {
+            case 'w': // WiFi
+                tab_index = 0;
+                break;
+            case 'b': // Bluetooth
+                tab_index = 1;
+                break;
+            case 'a': // Audio
+                tab_index = 2;
+                break;
+            case 'r': // Brightness (using 'r' since 'b' is already used)
+                tab_index = 3;
+                break;
+            case 'h': // Help
+                print_help(argv[0]);
+                return 0;
+            default:
+                fprintf(stderr, "Try '%s --help' for more information.\n", argv[0]);
+                return 1;
+        }
+    }
     
     // Use G_APPLICATION_DEFAULT_FLAGS instead of deprecated G_APPLICATION_FLAGS_NONE
     app = gtk_application_new("org.gtk.better-control", G_APPLICATION_DEFAULT_FLAGS);
-    g_signal_connect(app, "activate", G_CALLBACK(activate), NULL);
-    status = g_application_run(G_APPLICATION(app), argc, argv);
+    g_signal_connect(app, "activate", G_CALLBACK(activate), GINT_TO_POINTER(tab_index));
+    status = g_application_run(G_APPLICATION(app), 1, argv); // Use 1 for argc to prevent GTK from parsing our args
     g_object_unref(app);
     
     return status;
-} 
+}
